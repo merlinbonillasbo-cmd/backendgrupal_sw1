@@ -8,5 +8,6 @@ class Usuario(Base):
     nombre_completo = Column(String(200), nullable=False)
     correo = Column(String(254), unique=True, nullable=False, index=True)
     contrasena = Column(String, nullable=False)
+    rol = Column(String(30), nullable=False, server_default="USUARIO")
     estado = Column(Boolean, nullable=False, server_default="true")
     fecha_creacion = Column(TIMESTAMP(timezone=True), server_default=text("NOW()"))

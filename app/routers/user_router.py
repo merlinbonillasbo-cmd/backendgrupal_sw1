@@ -20,7 +20,8 @@ def registrar_usuario(data: UsuarioCreate, db: Session = Depends(get_db)):
         nuevo = Usuario(
             nombre_completo=data.nombre_completo,
             correo=data.correo,
-            contrasena=hash_password(data.contrasena) # Tu nueva función moderna con bcrypt directo
+            contrasena=hash_password(data.contrasena), # Tu nueva función moderna con bcrypt directo
+            rol=data.rol
         )
         db.add(nuevo)
         db.commit()
