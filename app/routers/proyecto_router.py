@@ -55,3 +55,25 @@ def eliminar_proyecto(id: int, db: Session = Depends(get_db), usuario_id: int = 
         raise HTTPException(status_code=500, detail=f"Error en la base de datos: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")
+
+# 4. EDITAR PROYECTO (Requiere Token)
+@proyecto_router.put("/{id}", response_model=ProyectoOut)
+def editar_proyecto(id: int, data: ProyectoCreate, db: Session = Depends(get_db), usuario_id: int = Depends(verify_token)):
+    try:
+        proyecto = db.query(Proyecto).filter(Proyecto.id == id, Proyecto.id_usuario == usuario_id).first()
+        if not proyecto:
+            raise HTTPException(status_code=404, detail="Proyecto no encontrado o no autorizado")
+        
+        proyecto.nombre = data.nombre
+        proyecto.descripcion = data.descripcion
+        
+        db.commit()
+        db.refresh(proyecto)
+        return proyecto
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error en la base de datos: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")

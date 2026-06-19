@@ -1,13 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
+
 from app.core.db import engine, Base
 from app.routers.user_router import user_router
 from app.routers.proyecto_router import proyecto_router
-
+from app.routers.audio_router import audio_router
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Software 1")
+
+# Asegurar carpeta de subida y montar archivos estáticos
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 
@@ -31,6 +38,7 @@ app.add_middleware(
 
 app.include_router(user_router, prefix="/api/usuario", tags=["Users"])
 app.include_router(proyecto_router, prefix="/api/proyecto", tags=["Proyectos"])
+app.include_router(audio_router, prefix="/api", tags=["Audios"])
 
 
 @app.get("/")
