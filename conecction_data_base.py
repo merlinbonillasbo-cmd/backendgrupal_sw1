@@ -2,12 +2,12 @@ import psycopg2
 
 try:
     conn = psycopg2.connect(
-        dbname="postgres",
+        dbname="db_sof1",
         user="postgres",
-        password="Software_1_2_3_4",
-        host="db.pqqvoeybcarrrechvxzu.supabase.co",
+        password="postgres",
+        host="localhost",
         port="5432",
-        sslmode="require"
+        sslmode="disable"  # 👈 Cambiado a disable para desarrollo local
     )
     print("✅ Conexión exitosa")
     conn.close()

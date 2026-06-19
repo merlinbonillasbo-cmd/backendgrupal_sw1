@@ -1,37 +1,53 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.db import engine, Base
-from app.routers.user_router import user_router
 
+from app.database.connection import engine, Base
+from app.routers.auth_router import auth_router
+from app.routers.usuario_router import usuario_router
+from app.routers.proyecto_router import proyecto_router
+from app.routers.audio_router import audio_router
+from app.routers.transcripcion_router import transcripcion_router
+from app.routers.resumen_router import resumen_router
+from app.routers.chat_router import chat_router
+from app.routers.grafo_router import grafo_router
 
+# Crea las tablas definidas en los modelos SQLAlchemy
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Software 1")
+app = FastAPI(
+    title="Software 1",
+    version="1.0.0",
+    description="Sistema inteligente para procesamiento y análisis de audios"
+)
 
 
-
-# 1. Define las URLs de los frontends que tienen permitido acceder a tu API
+# URLs permitidas del frontend
 origins = [
     "http://localhost:5173",
-    "http://127.0.0.1:5173",  # Agrega este también por seguridad
+    "http://127.0.0.1:5173",
 ]
 
-# 2. Agrega el middleware de CORS a la aplicación
+
+# Middleware CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,           # Permite las peticiones desde los origins definidos
-    allow_credentials=True,          # Permite el envío de cookies o cabeceras de autenticación
-    allow_methods=["*"],             # Permite todos los métodos HTTP (GET, POST, PUT, DELETE, etc.)
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin"],
 )
 
 
-
-app.include_router(user_router, prefix="/api/usuario", tags=["Users"])
-
+# Routers
+app.include_router(auth_router)
+app.include_router(usuario_router)
+app.include_router(proyecto_router)
+app.include_router(audio_router)
+app.include_router(transcripcion_router)
+app.include_router(resumen_router)
+app.include_router(chat_router)
+app.include_router(grafo_router)
 
 @app.get("/")
 def home():
     return {"mensaje": "FastAPI funcionando"}
-
-
