@@ -2,11 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.db import engine, Base
 from app.routers.user_router import user_router
+from app.routers.proyecto_router import proyecto_router
 
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Software 1")
+
 
 
 
@@ -28,6 +30,7 @@ app.add_middleware(
 
 
 app.include_router(user_router, prefix="/api/usuario", tags=["Users"])
+app.include_router(proyecto_router, prefix="/api/proyecto", tags=["Proyectos"])
 
 
 @app.get("/")
