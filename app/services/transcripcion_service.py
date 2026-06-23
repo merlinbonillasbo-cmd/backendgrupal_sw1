@@ -1,4 +1,6 @@
 import os
+import requests
+from sqlalchemy import text as sql_text
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -119,6 +121,74 @@ def crear_o_reemplazar_transcripcion(
     return nueva_transcripcion
 
 
+def obtener_embedding_ollama(texto: str) -> list[float]:
+    url = "http://ollama:11434/api/embeddings"
+    payload = {
+        "model": "nomic-embed-text",
+        "prompt": texto
+    }
+    response = requests.post(url, json=payload, timeout=30)
+    response.raise_for_status()
+    return response.json()["embedding"]
+
+
+def chunk_texto(texto: str, max_caracteres: int = 600) -> list[str]:
+    # Separamos el texto por párrafos
+    paragraphs = [p.strip() for p in texto.split("\n") if p.strip()]
+    chunks = []
+    current_chunk = []
+    current_len = 0
+    for p in paragraphs:
+        if len(p) > max_caracteres:
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+                current_chunk = []
+                current_len = 0
+            chunks.append(p)
+        elif current_len + len(p) > max_caracteres:
+            chunks.append("\n".join(current_chunk))
+            current_chunk = [p]
+            current_len = len(p)
+        else:
+            current_chunk.append(p)
+            current_len += len(p) + 1
+            
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+        
+    return chunks
+
+
+def guardar_fragmentos_transcripcion(db: Session, transcripcion_id: int, chunks: list[str]):
+    db.execute(
+        sql_text("DELETE FROM fragmento_transcripcion WHERE id_transcripcion = :t_id"),
+        {"t_id": transcripcion_id}
+    )
+    db.commit()
+
+    for idx, chunk in enumerate(chunks):
+        try:
+            vector_embed = obtener_embedding_ollama(chunk)
+            vector_str = f"[{','.join(map(str, vector_embed))}]"
+            
+            db.execute(
+                sql_text("""
+                    INSERT INTO fragmento_transcripcion (id_transcripcion, indice_fragmento, texto_fragmento, embedding)
+                    VALUES (:t_id, :idx, :texto, CAST(:emb AS vector))
+                """),
+                {
+                    "t_id": transcripcion_id,
+                    "idx": idx,
+                    "texto": chunk,
+                    "emb": vector_str
+                }
+            )
+        except Exception as e:
+            print(f"Error al generar embedding para chunk {idx}: {str(e)}")
+            continue
+    db.commit()
+
+
 def transcribir_audio(
     db: Session,
     audio_id: int,
@@ -135,6 +205,12 @@ def transcribir_audio(
         texto = transcribir_audio_con_gemini(audio.url_audio)
 
         transcripcion = crear_o_reemplazar_transcripcion(db, audio, texto)
+
+        try:
+            chunks = chunk_texto(texto)
+            guardar_fragmentos_transcripcion(db, transcripcion.id, chunks)
+        except Exception as embed_err:
+            print(f"Advertencia: no se pudo guardar fragmentos vectorizados: {str(embed_err)}")
 
         audio.estado_procesamiento = "COMPLETADO"
         audio.mensaje_error = None
@@ -157,6 +233,7 @@ def transcribir_audio(
             status_code=500,
             detail=f"Error al transcribir el audio: {str(e)}"
         )
+
 
 
 def obtener_transcripcion_audio(

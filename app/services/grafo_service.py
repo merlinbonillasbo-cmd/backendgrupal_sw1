@@ -3,6 +3,7 @@ import re
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text as sql_text
 from google import genai
 from google.genai import types
 
@@ -486,3 +487,69 @@ def eliminar_grafo_usuario(
 
     db.delete(grafo)
     db.commit()
+
+
+def comparar_audios_usuario(db: Session, usuario_id: int):
+    query_audios = sql_text("""
+        SELECT a.id, a.titulo, p.nombre AS proyecto_nombre, AVG(f.embedding)::text AS embedding_str
+        FROM audio a
+        JOIN proyecto p ON a.id_proyecto = p.id
+        LEFT JOIN transcripcion t ON t.id_audio = a.id
+        LEFT JOIN fragmento_transcripcion f ON f.id_transcripcion = t.id
+        WHERE p.id_usuario = :u_id
+        GROUP BY a.id, a.titulo, p.nombre
+    """)
+    
+    result = db.execute(query_audios, {"u_id": usuario_id}).fetchall()
+    
+    nodes = []
+    audios_con_embedding = []
+    
+    for row in result:
+        audio_id, titulo, proyecto_nombre, emb_str = row
+        
+        # Siempre creamos el nodo para cada audio del usuario
+        nodes.append({
+            "id": f"audio-{audio_id}",
+            "label": titulo,
+            "proyecto": proyecto_nombre
+        })
+        
+        # Si tiene embedding, lo guardamos para calcular similitudes
+        if emb_str:
+            try:
+                emb = [float(x) for x in emb_str.replace('[', '').replace(']', '').split(',') if x.strip()]
+                audios_con_embedding.append({
+                    "id": audio_id,
+                    "embedding": emb
+                })
+            except Exception as parse_err:
+                print(f"Error parseando embedding para audio {audio_id}: {str(parse_err)}")
+                
+    edges = []
+    num_audios = len(audios_con_embedding)
+    for i in range(num_audios):
+        for j in range(i + 1, num_audios):
+            aud1 = audios_con_embedding[i]
+            aud2 = audios_con_embedding[j]
+            
+            v1 = aud1["embedding"]
+            v2 = aud2["embedding"]
+            
+            dot_product = sum(x * y for x, y in zip(v1, v2))
+            norm1 = sum(x * x for x in v1) ** 0.5
+            norm2 = sum(x * x for x in v2) ** 0.5
+            
+            if norm1 > 0 and norm2 > 0:
+                sim = dot_product / (norm1 * norm2)
+                edges.append({
+                    "id": f"edge-{aud1['id']}-{aud2['id']}",
+                    "source": f"audio-{aud1['id']}",
+                    "target": f"audio-{aud2['id']}",
+                    "similarity": round(sim, 4)
+                })
+                
+    return {
+        "nodes": nodes,
+        "edges": edges
+    }

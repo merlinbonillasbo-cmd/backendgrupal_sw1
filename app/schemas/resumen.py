@@ -18,3 +18,16 @@ class ResumenOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ResumenSeleccionCreate(BaseModel):
+    titulo: Optional[str] = None
+    audio_ids: list[int]
+    tipo_resumen: str = Field("MEDIO", pattern="^(CORTO|MEDIO|DETALLADO)$")
+
+
+class ResumenManualCreate(BaseModel):
+    titulo: str
+    texto: str
+    tipo_resumen: str = "MEDIO"
+    audio_ids: Optional[list[int]] = None

@@ -10,8 +10,10 @@ from app.services.grafo_service import (
     obtener_ultimo_grafo_proyecto,
     listar_grafos_proyecto,
     obtener_grafo_por_id,
-    eliminar_grafo_usuario
+    eliminar_grafo_usuario,
+    comparar_audios_usuario
 )
+
 
 
 grafo_router = APIRouter(
@@ -170,4 +172,18 @@ def eliminar_grafo(
         raise HTTPException(
             status_code=500,
             detail=f"Error inesperado: {str(e)}"
+        )
+
+
+@grafo_router.get("/audios/comparar")
+def comparar_audios(
+    usuario_id: int = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    try:
+        return comparar_audios_usuario(db=db, usuario_id=usuario_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al comparar audios: {str(e)}"
         )

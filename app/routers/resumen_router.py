@@ -5,10 +5,13 @@ from fastapi.responses import StreamingResponse
 
 from app.database.connection import get_db
 from app.core.security import verify_token
-from app.schemas.resumen import ResumenCreate, ResumenOut
+from app.schemas.resumen import ResumenCreate, ResumenOut, ResumenSeleccionCreate, ResumenManualCreate
+from app.models.resumen import Resumen
+from app.models.solicitud import Solicitud
 from app.services.resumen_service import (
     generar_resumen_de_audio,
     generar_resumen_de_proyecto,
+    generar_resumen_seleccion,
     obtener_ultimo_resumen_audio,
     obtener_ultimo_resumen_proyecto,
     obtener_resumen_por_id_usuario,
@@ -16,7 +19,8 @@ from app.services.resumen_service import (
     listar_resumenes_por_audio,
     generar_archivo_txt,
     generar_archivo_pdf,
-    generar_archivo_word
+    generar_archivo_word,
+    vincular_audios_solicitud
 )
 
 
@@ -24,6 +28,37 @@ resumen_router = APIRouter(
     prefix="/api/resumenes",
     tags=["Resúmenes"]
 )
+
+
+@resumen_router.get("", response_model=list[ResumenOut])
+def historial_resumenes_usuario(
+    usuario_id: int = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    try:
+        resumenes = (
+            db.query(Resumen)
+            .join(Solicitud, Resumen.id_solicitud == Solicitud.id)
+            .filter(
+                Solicitud.id_usuario == usuario_id,
+                Solicitud.tipo == "RESUMEN"
+            )
+            .order_by(Resumen.creado_en.desc())
+            .all()
+        )
+        return resumenes
+
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en la base de datos: {str(e)}"
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado: {str(e)}"
+        )
 
 
 @resumen_router.post("/audio/{audio_id}", response_model=ResumenOut)
@@ -200,6 +235,92 @@ def historial_resumenes_audio(
         )
 
     except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado: {str(e)}"
+        )
+
+
+@resumen_router.post("", response_model=ResumenOut)
+def crear_resumen_seleccion(
+    data: ResumenSeleccionCreate,
+    usuario_id: int = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    try:
+        return generar_resumen_seleccion(
+            db=db,
+            usuario_id=usuario_id,
+            titulo=data.titulo,
+            audio_ids=data.audio_ids,
+            tipo_resumen=data.tipo_resumen
+        )
+
+    except HTTPException:
+        raise
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en la base de datos: {str(e)}"
+        )
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado: {str(e)}"
+        )
+
+
+@resumen_router.post("/manual", response_model=ResumenOut)
+def crear_resumen_manual(
+    data: ResumenManualCreate,
+    usuario_id: int = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    try:
+        from datetime import datetime, timezone
+        solicitud = Solicitud(
+            id_usuario=usuario_id,
+            tipo="RESUMEN",
+            estado="COMPLETADO",
+            prompt_usado="Guardado manualmente desde Chat",
+            creado_en=datetime.now(timezone.utc),
+            completado_en=datetime.now(timezone.utc)
+        )
+        db.add(solicitud)
+        db.commit()
+        db.refresh(solicitud)
+
+        if data.audio_ids:
+            vincular_audios_solicitud(db, solicitud.id, data.audio_ids)
+
+        resumen = Resumen(
+            id_solicitud=solicitud.id,
+            titulo=data.titulo,
+            tipo_resumen=data.tipo_resumen,
+            contenido={
+                "texto": data.texto,
+                "audios_usados": data.audio_ids or [],
+                "modelo_usado": "Guardado desde Chat"
+            }
+        )
+        db.add(resumen)
+        db.commit()
+        db.refresh(resumen)
+        return resumen
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en la base de datos: {str(e)}"
+        )
+
+    except Exception as e:
+        db.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"Error inesperado: {str(e)}"

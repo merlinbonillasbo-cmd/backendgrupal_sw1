@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import io
+import requests
 from html import escape
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -49,6 +50,56 @@ Transcripción:
 """
 
 
+def obtener_url_ollama_activa() -> str:
+    for host in ["ollama", "localhost", "127.0.0.1"]:
+        try:
+            url = f"http://{host}:11434/api/tags"
+            response = requests.get(url, timeout=2)
+            if response.status_code == 200:
+                return f"http://{host}:11434"
+        except Exception:
+            continue
+    return "http://ollama:11434"
+
+
+def seleccionar_modelo_ollama(active_url: str) -> str:
+    try:
+        url = f"{active_url}/api/tags"
+        response = requests.get(url, timeout=3)
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            names = [m["name"] for m in models]
+            generativos = [n for n in names if "embed" not in n]
+            if generativos:
+                for fav in ["llama3.2", "llama3", "mistral", "gemma", "phi3"]:
+                    for g in generativos:
+                        if fav in g:
+                            return g
+                return generativos[0]
+    except Exception:
+        pass
+    return "llama3.2"
+
+
+def generar_resumen_con_ollama(texto: str, tipo_resumen: str) -> str:
+    active_url = obtener_url_ollama_activa()
+    model = seleccionar_modelo_ollama(active_url)
+    prompt = construir_prompt_resumen(texto, tipo_resumen)
+    
+    url = f"{active_url}/api/generate"
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False
+    }
+    response = requests.post(url, json=payload, timeout=300)
+    response.raise_for_status()
+    resumen = response.json()["response"].strip()
+    if not resumen:
+        raise ValueError("Ollama retornó un resumen vacío")
+    return resumen
+
+
 def generar_resumen_con_gemini(texto: str, tipo_resumen: str) -> str:
     client = genai.Client(api_key=settings.gemini_api_key)
 
@@ -68,6 +119,28 @@ def generar_resumen_con_gemini(texto: str, tipo_resumen: str) -> str:
         )
 
     return resumen.strip()
+
+
+def generar_resumen_ia(texto: str, tipo_resumen: str) -> tuple[str, str]:
+    """
+    Genera resumen intentando usar Ollama y haciendo fallback a Gemini.
+    Retorna la tupla (resumen_generado, modelo_usado).
+    """
+    try:
+        texto_resumen = generar_resumen_con_ollama(texto, tipo_resumen)
+        active_url = obtener_url_ollama_activa()
+        model_name = seleccionar_modelo_ollama(active_url)
+        return texto_resumen, f"Ollama ({model_name})"
+    except Exception as e:
+        print(f"Error con Ollama (se intentará fallback a Gemini): {e}")
+        try:
+            texto_resumen = generar_resumen_con_gemini(texto, tipo_resumen)
+            return texto_resumen, f"Gemini ({MODELO_RESUMEN})"
+        except Exception as gemini_err:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error en IA de Ollama y Gemini (Fallback falló). Detalles: {str(gemini_err)}"
+            )
 
 
 def obtener_audio_usuario_con_transcripcion(
@@ -180,7 +253,8 @@ def guardar_resumen(
     titulo: str,
     tipo_resumen: str,
     texto_resumen: str,
-    audios_usados: list[int]
+    audios_usados: list[int],
+    modelo_usado: str = MODELO_RESUMEN
 ) -> Resumen:
     resumen = Resumen(
         id_solicitud=solicitud.id,
@@ -189,7 +263,7 @@ def guardar_resumen(
         contenido={
             "texto": texto_resumen,
             "audios_usados": audios_usados,
-            "modelo_usado": MODELO_RESUMEN
+            "modelo_usado": modelo_usado
         }
     )
 
@@ -227,7 +301,7 @@ def generar_resumen_de_audio(
     try:
         vincular_audios_solicitud(db, solicitud.id, [audio.id])
 
-        texto_resumen = generar_resumen_con_gemini(
+        texto_resumen, modelo_usado = generar_resumen_ia(
             transcripcion.texto_generado,
             tipo_resumen
         )
@@ -238,7 +312,8 @@ def generar_resumen_de_audio(
             titulo=f"Resumen de {audio.titulo}",
             tipo_resumen=tipo_resumen,
             texto_resumen=texto_resumen,
-            audios_usados=[audio.id]
+            audios_usados=[audio.id],
+            modelo_usado=modelo_usado
         )
 
     except Exception as e:
@@ -287,7 +362,7 @@ def generar_resumen_de_proyecto(
     try:
         vincular_audios_solicitud(db, solicitud.id, audio_ids)
 
-        texto_resumen = generar_resumen_con_gemini(
+        texto_resumen, modelo_usado = generar_resumen_ia(
             texto_unificado,
             tipo_resumen
         )
@@ -298,7 +373,8 @@ def generar_resumen_de_proyecto(
             titulo="Resumen general del proyecto",
             tipo_resumen=tipo_resumen,
             texto_resumen=texto_resumen,
-            audios_usados=audio_ids
+            audios_usados=audio_ids,
+            modelo_usado=modelo_usado
         )
 
     except Exception as e:
@@ -309,6 +385,72 @@ def generar_resumen_de_proyecto(
         raise HTTPException(
             status_code=500,
             detail=f"Error al generar resumen del proyecto: {str(e)}"
+        )
+
+
+def generar_resumen_seleccion(
+    db: Session,
+    usuario_id: int,
+    titulo: str,
+    audio_ids: list[int],
+    tipo_resumen: str
+) -> Resumen:
+    if not audio_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Debe seleccionar al menos un audio para generar el resumen"
+        )
+
+    textos = []
+    for audio_id in audio_ids:
+        audio, transcripcion = obtener_audio_usuario_con_transcripcion(
+            db,
+            audio_id,
+            usuario_id
+        )
+        if transcripcion.texto_generado:
+            textos.append(f"Audio: {audio.titulo}\n{transcripcion.texto_generado}")
+
+    if not textos:
+        raise HTTPException(
+            status_code=400,
+            detail="Ninguno de los audios seleccionados tiene transcripciones válidas"
+        )
+
+    texto_unificado = "\n\n---\n\n".join(textos)
+
+    prompt = construir_prompt_resumen(texto_unificado, tipo_resumen)
+
+    solicitud = crear_solicitud_resumen(db, usuario_id, prompt)
+
+    try:
+        vincular_audios_solicitud(db, solicitud.id, audio_ids)
+
+        texto_resumen, modelo_usado = generar_resumen_ia(
+            texto_unificado,
+            tipo_resumen
+        )
+
+        resumen_titulo = titulo if titulo and titulo.strip() else f"Resumen de {len(audio_ids)} audios"
+
+        return guardar_resumen(
+            db=db,
+            solicitud=solicitud,
+            titulo=resumen_titulo,
+            tipo_resumen=tipo_resumen,
+            texto_resumen=texto_resumen,
+            audios_usados=audio_ids,
+            modelo_usado=modelo_usado
+        )
+
+    except Exception as e:
+        solicitud.estado = "ERROR"
+        solicitud.mensaje_error = str(e)
+        db.commit()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al generar el resumen de selección: {str(e)}"
         )
     
 def obtener_ultimo_resumen_audio(
