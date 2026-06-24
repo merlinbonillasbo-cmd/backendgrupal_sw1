@@ -12,6 +12,7 @@ from app.services.proyecto_service import (
     actualizar_proyecto,
     eliminar_proyecto
 )
+from app.services.pago_service import verificar_limite_proyectos
 
 
 proyecto_router = APIRouter(
@@ -27,6 +28,7 @@ def crear(
     db: Session = Depends(get_db)
 ):
     try:
+        verificar_limite_proyectos(db, usuario_id)
         return crear_proyecto(db, data, usuario_id)
 
     except SQLAlchemyError as e:

@@ -12,13 +12,22 @@ from app.routers.chat_router import chat_router
 from app.routers.grafo_router import grafo_router
 from app.routers.quiz_router import quiz_router
 from app.routers.presentacion_router import presentacion_router
+from app.routers.admin_router import admin_router
+from app.routers.suscripcion_router import suscripcion_router
+
+from sqlalchemy import text
 
 from app.models import (
     usuario, proyecto, audio, transcripcion,
     grafo, resumen, quiz, chat_conversacion,
     chat_mensaje, solicitud, solicitud_audio,
-    presentacion, fragmento_transcripcion
+    presentacion, fragmento_transcripcion,
+    plan, suscripcion, pago
 )
+
+with engine.connect() as conn:
+    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+    conn.commit()
 
 # Crea las tablas definidas en los modelos SQLAlchemy
 Base.metadata.create_all(bind=engine)
@@ -58,6 +67,8 @@ app.include_router(chat_router)
 app.include_router(grafo_router)
 app.include_router(quiz_router)
 app.include_router(presentacion_router)
+app.include_router(admin_router)
+app.include_router(suscripcion_router)
 
 
 

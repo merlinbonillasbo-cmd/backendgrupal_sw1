@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, Text, TIMESTAMP, text, ForeignKey
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 
 from app.database.connection import Base
 
@@ -15,14 +16,10 @@ class FragmentoTranscripcion(Base):
         nullable=False
     )
 
-    #id_hablante = Column(
-    #    Integer,
-    #    ForeignKey("hablante.id", ondelete="SET NULL"),
-    #    nullable=True
-    #)
-
     indice_fragmento = Column(Integer, nullable=False)
     texto_fragmento = Column(Text, nullable=False)
+
+    embedding = Column(Vector(768), nullable=True)
 
     creado_en = Column(
         TIMESTAMP(timezone=True),

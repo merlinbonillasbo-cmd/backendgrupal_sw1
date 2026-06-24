@@ -230,11 +230,11 @@ def generar_respuesta_con_ollama(contexto: str, pregunta: str) -> str:
     url = "http://ollama:11434/api/generate"
     prompt = crear_prompt_chat(contexto, pregunta)
     payload = {
-        "model": "llama3.2",
+        "model": "qwen2.5:1.5b",
         "prompt": prompt,
         "stream": False
     }
-    response = requests.post(url, json=payload, timeout=60)
+    response = requests.post(url, json=payload, timeout=300)
     response.raise_for_status()
     respuesta = response.json()["response"]
     if not respuesta or not respuesta.strip():

@@ -11,6 +11,7 @@ from app.services.audio_service import (
     obtener_audio_por_id,
     eliminar_audio
 )
+from app.services.pago_service import verificar_limite_audios
 
 
 audio_router = APIRouter(
@@ -28,6 +29,8 @@ def subir_audio(
     db: Session = Depends(get_db)
 ):
     try:
+        # Verificar límite de audios del plan activo
+        verificar_limite_audios(db, usuario_id)
         return crear_audio(db, proyecto_id, usuario_id, titulo, file)
 
     except HTTPException:

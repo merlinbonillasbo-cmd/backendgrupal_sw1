@@ -9,6 +9,7 @@ from app.services.transcripcion_service import (
     transcribir_audio,
     obtener_transcripcion_audio
 )
+from app.services.pago_service import verificar_limite_transcripciones
 
 
 transcripcion_router = APIRouter(
@@ -24,6 +25,7 @@ def generar_transcripcion(
     db: Session = Depends(get_db)
 ):
     try:
+        verificar_limite_transcripciones(db, usuario_id)
         return transcribir_audio(db, audio_id, usuario_id)
 
     except HTTPException:

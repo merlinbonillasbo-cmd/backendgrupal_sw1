@@ -22,6 +22,7 @@ from app.services.resumen_service import (
     generar_archivo_word,
     vincular_audios_solicitud
 )
+from app.services.pago_service import verificar_limite_resumenes
 
 
 resumen_router = APIRouter(
@@ -69,6 +70,7 @@ def resumen_audio(
     db: Session = Depends(get_db)
 ):
     try:
+        verificar_limite_resumenes(db, usuario_id)
         return generar_resumen_de_audio(
             db=db,
             audio_id=audio_id,
@@ -102,6 +104,7 @@ def resumen_proyecto(
     db: Session = Depends(get_db)
 ):
     try:
+        verificar_limite_resumenes(db, usuario_id)
         return generar_resumen_de_proyecto(
             db=db,
             proyecto_id=proyecto_id,
@@ -248,6 +251,7 @@ def crear_resumen_seleccion(
     db: Session = Depends(get_db)
 ):
     try:
+        verificar_limite_resumenes(db, usuario_id)
         return generar_resumen_seleccion(
             db=db,
             usuario_id=usuario_id,

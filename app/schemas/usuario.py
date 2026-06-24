@@ -17,6 +17,7 @@ class UsuarioUpdate(BaseModel):
 class UsuarioOut(UsuarioBase):
     id: int
     estado: bool
+    rol: str
     
     class Config:
         from_attributes = True
