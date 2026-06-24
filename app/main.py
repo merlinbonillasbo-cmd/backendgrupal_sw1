@@ -13,9 +13,15 @@ from app.routers.grafo_router import grafo_router
 from app.routers.quiz_router import quiz_router
 from app.routers.presentacion_router import presentacion_router
 
+from app.models import (
+    usuario, proyecto, audio, transcripcion,
+    grafo, resumen, quiz, chat_conversacion,
+    chat_mensaje, solicitud, solicitud_audio,
+    presentacion, fragmento_transcripcion
+)
 
 # Crea las tablas definidas en los modelos SQLAlchemy
-# Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Software 1",

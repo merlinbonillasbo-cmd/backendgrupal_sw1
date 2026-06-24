@@ -69,7 +69,7 @@ def seleccionar_modelo_ollama(active_url: str) -> str:
             generativos = [n for n in names if "embed" not in n]
             if generativos:
                 # Priorizar modelos comunes
-                for fav in ["llama3.2", "llama3", "mistral", "gemma", "phi3"]:
+                for fav in ["llama3.2", "llama3", "mistral", "gemma", "phi3", "gemma:2b","qwen2.5:1.5b"]:
                     for g in generativos:
                         if fav in g:
                             return g

@@ -15,11 +15,11 @@ class FragmentoTranscripcion(Base):
         nullable=False
     )
 
-    id_hablante = Column(
-        Integer,
-        ForeignKey("hablante.id", ondelete="SET NULL"),
-        nullable=True
-    )
+    #id_hablante = Column(
+    #    Integer,
+    #    ForeignKey("hablante.id", ondelete="SET NULL"),
+    #    nullable=True
+    #)
 
     indice_fragmento = Column(Integer, nullable=False)
     texto_fragmento = Column(Text, nullable=False)
